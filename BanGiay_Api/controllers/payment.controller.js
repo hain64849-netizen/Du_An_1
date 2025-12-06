@@ -107,15 +107,15 @@ exports.createPayment = async (req, res) => {
     await payment.save();
 
     // Convert _id to id for response
-    const paymentData = payment.toObject();
-    paymentData.id = paymentData._id.toString();
-    delete paymentData._id;
-    delete paymentData.__v;
+    const responseData = payment.toObject();
+    responseData.id = responseData._id.toString();
+    delete responseData._id;
+    delete responseData.__v;
 
     res.status(201).json({
       success: true,
       message: "Thanh toán thành công",
-      data: paymentData,
+      data: responseData,
     });
   } catch (error) {
     console.error("Error creating payment:", error);
