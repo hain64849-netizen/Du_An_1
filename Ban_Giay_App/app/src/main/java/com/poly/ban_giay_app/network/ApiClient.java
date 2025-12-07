@@ -131,7 +131,20 @@ public final class ApiClient {
                 .retryOnConnectionFailure(true) // Tự động retry khi connection fail
                 .build();
 
-        String baseUrl = BuildConfig.API_BASE_URL;
+        // Lấy base URL từ BuildConfig, nếu không có thì dùng giá trị mặc định
+        String baseUrl;
+        try {
+            baseUrl = BuildConfig.API_BASE_URL;
+            if (baseUrl == null || baseUrl.isEmpty()) {
+                baseUrl = "http://10.0.2.2:3000/api/"; // Default cho emulator
+                Log.w(TAG, "BuildConfig.API_BASE_URL is empty, using default: " + baseUrl);
+            }
+        } catch (Exception e) {
+            // Nếu BuildConfig chưa được generate, dùng giá trị mặc định
+            baseUrl = "http://10.0.2.2:3000/api/"; // Default cho emulator
+            Log.w(TAG, "BuildConfig.API_BASE_URL not found, using default: " + baseUrl);
+            Log.w(TAG, "Please rebuild project to generate BuildConfig");
+        }
         Log.d(TAG, "Building Retrofit with base URL: " + baseUrl);
 
         return new Retrofit.Builder()

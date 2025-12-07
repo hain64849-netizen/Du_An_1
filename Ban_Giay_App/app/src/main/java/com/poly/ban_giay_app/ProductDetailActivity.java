@@ -7,7 +7,6 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.StrikethroughSpan;
 import android.text.style.UnderlineSpan;
-import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -39,27 +38,12 @@ public class ProductDetailActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_product_detail);
 
-        // Apply insets - chỉ padding top và sides, không padding bottom để nút mua không bị che
+        // Apply insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-        
-        // Đảm bảo layoutBuyButton có padding bottom từ system bars
-        View layoutBuyButton = findViewById(R.id.layoutBuyButton);
-        if (layoutBuyButton != null) {
-            ViewCompat.setOnApplyWindowInsetsListener(layoutBuyButton, (v, insets) -> {
-                Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                    v.getPaddingLeft(),
-                    v.getPaddingTop(),
-                    v.getPaddingRight(),
-                    Math.max(v.getPaddingBottom(), systemBars.bottom)
-                );
-                return insets;
-            });
-        }
 
         // Get product from intent
         product = (Product) getIntent().getSerializableExtra("product");
@@ -69,9 +53,6 @@ public class ProductDetailActivity extends AppCompatActivity {
         }
 
         sessionManager = new SessionManager(this);
-        
-        // Set context cho CartManager để có thể gọi API
-        CartManager.getInstance().setContext(this);
 
         initViews();
         bindActions();
@@ -110,83 +91,25 @@ public class ProductDetailActivity extends AppCompatActivity {
             if (quantity > 1) {
                 quantity--;
                 txtQuantity.setText(String.valueOf(quantity));
-                updateBottomBar();
             }
         });
 
         btnIncrease.setOnClickListener(v -> {
             quantity++;
             txtQuantity.setText(String.valueOf(quantity));
-            updateBottomBar();
         });
 
         // Add to cart
         btnAddToCart.setOnClickListener(v -> {
-            // Kiểm tra đăng nhập
             if (!ensureLoggedIn()) {
                 return;
             }
-            
-            // Kiểm tra size đã được chọn chưa
             if (selectedSize.isEmpty()) {
-                Toast.makeText(this, "Vui lòng chọn kích thước trước khi thêm vào giỏ hàng", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Vui lòng chọn kích thước", Toast.LENGTH_SHORT).show();
                 return;
             }
-            
-            // Kiểm tra product ID
-            if (product.id == null || product.id.isEmpty()) {
-                Toast.makeText(this, "Lỗi: Sản phẩm không có ID. Vui lòng thử lại sau.", Toast.LENGTH_LONG).show();
-                Log.e("ProductDetailActivity", "Product ID is null or empty. Product name: " + product.name);
-                return;
-            }
-            
-            // Disable button để tránh click nhiều lần
-            btnAddToCart.setEnabled(false);
-            btnAddToCart.setText("Đang thêm...");
-            
-            // Hiển thị thông báo đang xử lý
-            Toast.makeText(this, "Đang thêm vào giỏ hàng...", Toast.LENGTH_SHORT).show();
-            
-            Log.d("ProductDetailActivity", "=== ADDING TO CART ===");
-            Log.d("ProductDetailActivity", "Product ID: " + product.id);
-            Log.d("ProductDetailActivity", "Product Name: " + product.name);
-            Log.d("ProductDetailActivity", "Size: " + selectedSize);
-            Log.d("ProductDetailActivity", "Quantity: " + quantity);
-            
-            CartManager.getInstance().addToCart(product, selectedSize, quantity, new CartManager.CartCallback() {
-                @Override
-                public void onSuccess(String message) {
-                    runOnUiThread(() -> {
-                        // Hiển thị thông báo từ server
-                        if (message != null && !message.isEmpty()) {
-                            if (message.contains("chỉ lưu cục bộ")) {
-                                // Cảnh báo nếu chỉ lưu cục bộ
-                                Toast.makeText(ProductDetailActivity.this, message, Toast.LENGTH_LONG).show();
-                            } else {
-                                // Thành công lưu lên server
-                                Toast.makeText(ProductDetailActivity.this, message, Toast.LENGTH_SHORT).show();
-                            }
-                        } else {
-                            Toast.makeText(ProductDetailActivity.this, "Đã thêm vào giỏ hàng thành công!", Toast.LENGTH_SHORT).show();
-                        }
-                        btnAddToCart.setEnabled(true);
-                        btnAddToCart.setText("THÊM VÀO GIỎ");
-                    });
-                }
-
-                @Override
-                public void onError(String error) {
-                    runOnUiThread(() -> {
-                        // Hiển thị lỗi nhưng vẫn thông báo đã thêm vào giỏ hàng cục bộ
-                        Log.e("ProductDetailActivity", "Error saving to server: " + error);
-                        Toast.makeText(ProductDetailActivity.this, 
-                            "Đã thêm vào giỏ hàng (chỉ lưu cục bộ). Lỗi: " + error, 
-                            Toast.LENGTH_LONG).show();
-                        btnAddToCart.setEnabled(true);
-                        btnAddToCart.setText("THÊM VÀO GIỎ");
-                    });
-                }
-            });
+            // TODO: Add to cart logic
+            Toast.makeText(this, "Đã thêm vào giỏ hàng thành công!", Toast.LENGTH_SHORT).show();
         });
 
         // Buy now
@@ -287,39 +210,6 @@ public class ProductDetailActivity extends AppCompatActivity {
         
         // Quantity
         txtQuantity.setText(String.valueOf(quantity));
-        
-        // Update bottom bar
-        updateBottomBar();
-    }
-    
-    /**
-     * Cập nhật nút mua với giá hiển thị bên trong
-     */
-    private void updateBottomBar() {
-        if (btnBuyNow != null && product != null) {
-            // Parse giá từ product.priceNew (format: "899.000₫")
-            String priceStr = product.priceNew.replace("₫", "").replace(".", "").trim();
-            try {
-                long pricePerUnit = Long.parseLong(priceStr);
-                long totalPrice = pricePerUnit * quantity;
-                String totalPriceFormatted = formatPrice(totalPrice);
-                
-                // Hiển thị giá trong nút mua: "MUA NGAY" trên, giá dưới
-                String buttonText = "MUA NGAY\n" + totalPriceFormatted;
-                btnBuyNow.setText(buttonText);
-            } catch (NumberFormatException e) {
-                // Nếu không parse được, dùng giá gốc
-                String buttonText = "MUA NGAY\n" + product.priceNew;
-                btnBuyNow.setText(buttonText);
-            }
-        }
-    }
-    
-    /**
-     * Format giá thành định dạng VNĐ
-     */
-    private String formatPrice(long price) {
-        return String.format("%,d₫", price).replace(",", ".");
     }
     
     /**
