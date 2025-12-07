@@ -43,13 +43,67 @@ public class CartAdapter extends RecyclerView.Adapter<CartAdapter.CartViewHolder
 
     @Override
     public void onBindViewHolder(@NonNull CartViewHolder holder, int position) {
+        if (cartItems == null || position < 0 || position >= cartItems.size()) {
+            Log.e("CartAdapter", "❌ Invalid position: " + position + ", list size: " + (cartItems != null ? cartItems.size() : 0));
+            return;
+        }
         CartItem item = cartItems.get(position);
+        Log.d("CartAdapter", "Binding item at position " + position + ": " + item.product.name);
         holder.bind(item, position);
     }
 
     @Override
     public int getItemCount() {
-        return cartItems.size();
+        int count = cartItems != null ? cartItems.size() : 0;
+        Log.d("CartAdapter", "getItemCount() = " + count);
+        return count;
+    }
+    
+    /**
+     * Update cart items list
+     */
+    public void updateCartItems(List<CartItem> newItems) {
+        Log.d("CartAdapter", "=== updateCartItems() ===");
+        Log.d("CartAdapter", "Old count: " + (cartItems != null ? cartItems.size() : 0));
+        Log.d("CartAdapter", "New count: " + (newItems != null ? newItems.size() : 0));
+        Log.d("CartAdapter", "Same reference: " + (cartItems == newItems));
+        
+        if (newItems == null) {
+            Log.w("CartAdapter", "newItems is null, clearing adapter");
+            if (cartItems != null) {
+                cartItems.clear();
+            }
+            notifyDataSetChanged();
+            return;
+        }
+        
+        // Nếu cùng reference, chỉ cần notify
+        if (cartItems == newItems) {
+            Log.d("CartAdapter", "Same reference, just notifying");
+            notifyDataSetChanged();
+            Log.d("CartAdapter", "✅ Notified. Item count: " + getItemCount());
+            return;
+        }
+        
+        // Nếu khác reference, update list
+        if (cartItems != null) {
+            cartItems.clear();
+            cartItems.addAll(newItems);
+            Log.d("CartAdapter", "Updated list with " + cartItems.size() + " items");
+        } else {
+            Log.e("CartAdapter", "❌ cartItems is null!");
+        }
+        
+        notifyDataSetChanged();
+        Log.d("CartAdapter", "✅ Adapter notified. Final item count: " + getItemCount());
+        
+        // Log từng item để debug
+        if (cartItems != null && !cartItems.isEmpty()) {
+            for (int i = 0; i < cartItems.size(); i++) {
+                CartItem item = cartItems.get(i);
+                Log.d("CartAdapter", "  Item " + i + ": " + item.product.name);
+            }
+        }
     }
 
     class CartViewHolder extends RecyclerView.ViewHolder {
@@ -185,14 +239,86 @@ public class CartAdapter extends RecyclerView.Adapter<CartAdapter.CartViewHolder
         }
 
         private int getImageResourceId(String imageName) {
-            String name = imageName;
+            if (imageName == null || imageName.trim().isEmpty()) {
+                return 0;
+            }
+            
+            String name = imageName.trim();
+            
+            // Loại bỏ path nếu có
             if (name.contains("/")) {
                 name = name.substring(name.lastIndexOf("/") + 1);
             }
+            
+            // Loại bỏ extension
             if (name.contains(".")) {
                 name = name.substring(0, name.lastIndexOf("."));
             }
-            return itemView.getContext().getResources().getIdentifier(name, "drawable", itemView.getContext().getPackageName());
+            
+            // Thử tìm với tên gốc
+            int resId = itemView.getContext().getResources().getIdentifier(name, "drawable", itemView.getContext().getPackageName());
+            if (resId != 0) {
+                return resId;
+            }
+            
+            // Nếu không tìm thấy, thử map với các tên phổ biến
+            // Map tên file từ API với drawable thực tế
+            String mappedName = mapImageName(name);
+            if (mappedName != null && !mappedName.equals(name)) {
+                resId = itemView.getContext().getResources().getIdentifier(mappedName, "drawable", itemView.getContext().getPackageName());
+                if (resId != 0) {
+                    Log.d("CartAdapter", "Mapped " + name + " to " + mappedName);
+                    return resId;
+                }
+            }
+            
+            // Nếu vẫn không tìm thấy, thử các biến thể
+            // Thử với prefix "giay" + số ngẫu nhiên (fallback)
+            for (int i = 2; i <= 15; i++) {
+                String tryName = "giay" + i;
+                resId = itemView.getContext().getResources().getIdentifier(tryName, "drawable", itemView.getContext().getPackageName());
+                if (resId != 0) {
+                    Log.d("CartAdapter", "Using fallback image: " + tryName);
+                    return resId;
+                }
+            }
+            
+            return 0;
+        }
+        
+        /**
+         * Map tên file từ API với drawable thực tế
+         */
+        private String mapImageName(String imageName) {
+            // Map các tên file phổ biến
+            String lowerName = imageName.toLowerCase();
+            
+            // Nike products
+            if (lowerName.contains("nike") || lowerName.contains("af1") || lowerName.contains("air")) {
+                return "giay10"; // Hoặc giay khác tùy bạn
+            }
+            
+            // Vans products
+            if (lowerName.contains("vans") || lowerName.contains("authentic") || lowerName.contains("oldskool")) {
+                return "giay11";
+            }
+            
+            // Adidas products
+            if (lowerName.contains("adidas") || lowerName.contains("stan") || lowerName.contains("superstar")) {
+                return "giay12";
+            }
+            
+            // Puma products
+            if (lowerName.contains("puma")) {
+                return "giay13";
+            }
+            
+            // Converse products
+            if (lowerName.contains("converse") || lowerName.contains("chuck")) {
+                return "giay14";
+            }
+            
+            return null;
         }
     }
 }

@@ -174,6 +174,10 @@ public class ProductResponse {
     public String getId() {
         return id;
     }
+    
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public String getName() {
         // Ưu tiên các field theo thứ tự
@@ -216,10 +220,42 @@ public class ProductResponse {
         return null;
     }
     
+    public void setGiaGoc(Integer giaGoc) {
+        this.giaGoc = giaGoc;
+    }
+    
     public Integer getGiaKhuyenMai() {
         if (giaKhuyenMai != null) return giaKhuyenMai;
         if (giaKhuyenMaiCamel != null) return giaKhuyenMaiCamel;
         return null;
+    }
+    
+    public void setGiaKhuyenMai(Integer giaKhuyenMai) {
+        this.giaKhuyenMai = giaKhuyenMai;
+    }
+    
+    public void setName(String name) {
+        this.tenSanPham = name;
+    }
+    
+    public void setHinhAnh(String hinhAnh) {
+        this.hinhAnh = hinhAnh;
+    }
+    
+    public void setMoTa(String moTa) {
+        this.moTa = moTa;
+    }
+    
+    public void setThuongHieu(String thuongHieu) {
+        this.thuongHieu = thuongHieu;
+    }
+    
+    public void setDanhMuc(String danhMuc) {
+        this.danhMuc = danhMuc;
+    }
+    
+    public void setDanhGia(Double danhGia) {
+        this.danhGia = danhGia;
     }
 
     public String getImageUrl() {

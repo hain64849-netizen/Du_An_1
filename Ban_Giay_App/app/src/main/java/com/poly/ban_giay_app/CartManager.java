@@ -65,22 +65,8 @@ public class CartManager {
         Log.d("CartManager", "Product imageRes: " + product.imageRes);
         Log.d("CartManager", "Size: " + size + ", Quantity: " + quantity);
         
-        // Kiểm tra xem sản phẩm với size này đã có trong giỏ chưa
-        for (CartItem item : cartItems) {
-            if (item.product.name.equals(product.name) && item.size.equals(size)) {
-                // Nếu đã có, tăng số lượng
-                item.quantity += quantity;
-                Log.d("CartManager", "Product already in cart, increased quantity");
-                // Cập nhật lên server
-                updateCartOnServer(product, size, item.quantity, callback);
-                return;
-            }
-        }
-        // Nếu chưa có, thêm mới
-        cartItems.add(new CartItem(product, size, quantity));
-        Log.d("CartManager", "Product added to cart. Total items: " + cartItems.size());
-        
-        // Lưu lên server
+        // CHỈ LƯU LÊN SERVER, KHÔNG THÊM VÀO LOCAL CART
+        // Server sẽ tự động xử lý việc tăng số lượng nếu sản phẩm đã có
         saveCartToServer(product, size, quantity, callback);
     }
 
@@ -117,6 +103,7 @@ public class CartManager {
         if (product.id == null || product.id.isEmpty()) {
             String warning = "Sản phẩm này không có ID từ server, chỉ lưu cục bộ. Vui lòng chọn sản phẩm từ danh sách chính thức để đồng bộ với server.";
             Log.w("CartManager", warning);
+            Log.w("CartManager", "Product name: " + product.name + ", Product ID: " + product.id);
             // Vẫn thông báo thành công cho user vì đã lưu vào local cart
             // Nhưng cảnh báo rằng không lưu được lên server
             if (callback != null) {
@@ -177,12 +164,30 @@ public class CartManager {
                         }
                     }
                 } else {
+                    // Xử lý lỗi chi tiết hơn
                     String error = NetworkUtils.extractErrorMessage(response);
+                    
+                    // Nếu là lỗi 404, có thể là sản phẩm không tồn tại
+                    if (response.code() == 404) {
+                        error = "Sản phẩm không tồn tại trong hệ thống. Vui lòng thử lại hoặc chọn sản phẩm khác.";
+                        Log.e("CartManager", "❌ Product not found (404). Product ID: " + product.id);
+                    }
+                    
                     Log.e("CartManager", "❌ Failed to save cart to server. Code: " + response.code() + ", Error: " + error);
                     if (response.errorBody() != null) {
                         try {
                             String errorBody = response.errorBody().string();
                             Log.e("CartManager", "Error body: " + errorBody);
+                            
+                            // Cố gắng parse JSON để lấy message từ backend
+                            try {
+                                org.json.JSONObject json = new org.json.JSONObject(errorBody);
+                                if (json.has("message")) {
+                                    error = json.getString("message");
+                                }
+                            } catch (Exception e) {
+                                // Ignore JSON parse error
+                            }
                         } catch (Exception e) {
                             Log.e("CartManager", "Cannot read error body", e);
                         }

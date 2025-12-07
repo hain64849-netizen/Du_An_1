@@ -896,8 +896,8 @@ public class MainActivity extends AppCompatActivity {
         View navCart = findViewById(R.id.navCart);
         if (navCart != null) {
             navCart.setOnClickListener(v -> {
-                // TODO: Navigate to cart screen when available
-                Toast.makeText(this, "Tính năng giỏ hàng đang phát triển", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(MainActivity.this, CartActivity.class);
+                startActivity(intent);
             });
         }
 

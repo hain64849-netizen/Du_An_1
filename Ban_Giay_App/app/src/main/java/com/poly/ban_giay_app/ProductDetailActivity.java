@@ -7,6 +7,7 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.StrikethroughSpan;
 import android.text.style.UnderlineSpan;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -53,6 +54,9 @@ public class ProductDetailActivity extends AppCompatActivity {
         }
 
         sessionManager = new SessionManager(this);
+        
+        // Initialize CartManager with context
+        CartManager.getInstance().setContext(this);
 
         initViews();
         bindActions();
@@ -108,8 +112,52 @@ public class ProductDetailActivity extends AppCompatActivity {
                 Toast.makeText(this, "Vui lòng chọn kích thước", Toast.LENGTH_SHORT).show();
                 return;
             }
-            // TODO: Add to cart logic
-            Toast.makeText(this, "Đã thêm vào giỏ hàng thành công!", Toast.LENGTH_SHORT).show();
+            
+            // Kiểm tra product ID trước khi thêm vào giỏ hàng
+            if (product.id == null || product.id.isEmpty()) {
+                Toast.makeText(this, "Sản phẩm này không có ID. Vui lòng chọn sản phẩm từ danh sách chính thức.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            // Disable button during API call
+            btnAddToCart.setEnabled(false);
+            btnAddToCart.setText("Đang thêm...");
+            
+            // Show immediate success message
+            Toast.makeText(this, "Đang thêm vào giỏ hàng...", Toast.LENGTH_SHORT).show();
+            
+            // Add to cart with callback
+            CartManager.getInstance().addToCart(product, selectedSize, quantity, new CartManager.CartCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    runOnUiThread(() -> {
+                        btnAddToCart.setEnabled(true);
+                        btnAddToCart.setText("Thêm vào giỏ hàng");
+                        // Hiển thị thông báo thành công
+                        Toast.makeText(ProductDetailActivity.this, message, Toast.LENGTH_SHORT).show();
+                        
+                        // Gửi broadcast để CartActivity reload từ API nếu đang mở
+                        android.content.Intent intent = new android.content.Intent("com.poly.ban_giay_app.CART_UPDATED");
+                        intent.setPackage(getPackageName()); // Đảm bảo broadcast chỉ gửi trong app
+                        sendBroadcast(intent);
+                        Log.d("ProductDetailActivity", "✅ Broadcast CART_UPDATED sent");
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        btnAddToCart.setEnabled(true);
+                        btnAddToCart.setText("Thêm vào giỏ hàng");
+                        // Hiển thị lỗi chi tiết hơn
+                        String errorMessage = error;
+                        if (error.contains("Không tìm thấy tài nguyên") || error.contains("404")) {
+                            errorMessage = "Sản phẩm không tồn tại trong hệ thống. Vui lòng thử lại hoặc chọn sản phẩm khác.";
+                        }
+                        Toast.makeText(ProductDetailActivity.this, "Lỗi: " + errorMessage, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
         });
 
         // Buy now
