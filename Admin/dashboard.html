@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Admin Panel</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Admin Dashboard</h1>
+                <p class="admin-info"></p>
+            </div>
+            <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="dashboard.html" class="nav-item active">Dashboard</a>
+            <a href="manage-customers.html" class="nav-item">Quản lý Khách hàng</a>
+            <a href="manage-orders.html" class="nav-item">Quản lý Đơn hàng</a>
+            <a href="manage-products.html" class="nav-item">Quản lý Sản phẩm</a>
+            <a href="manage-carts.html" class="nav-item">Quản lý Giỏ hàng</a>
+        </nav>
+
+        <div class="content-box">
+            <h2>Tổng quan hệ thống</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Tổng số khách hàng</h3>
+                    <div class="number" id="totalCustomers">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Tổng số sản phẩm</h3>
+                    <div class="number" id="totalProducts">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Tổng số đơn hàng</h3>
+                    <div class="number" id="totalOrders">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Doanh thu tháng này</h3>
+                    <div class="number" id="totalRevenue">0đ</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <h3>Đơn hàng gần đây</h3>
+                <table id="recentOrders">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Khách hàng</th>
+                            <th>Sản phẩm</th>
+                            <th>Tổng tiền</th>
+                            <th>Ngày</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // Load dashboard data
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Show loading
+                document.getElementById('totalCustomers').textContent = '...';
+                document.getElementById('totalProducts').textContent = '...';
+                document.getElementById('totalOrders').textContent = '...';
+                document.getElementById('totalRevenue').textContent = '...';
+                
+                const tbody = document.querySelector('#recentOrders tbody');
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Đang tải dữ liệu...</td></tr>';
+
+                // Load data from API
+                const [customers, products, orders] = await Promise.all([
+                    loadData('customers'),
+                    loadData('products'),
+                    loadData('orders')
+                ]);
+
+                // Update stats
+                document.getElementById('totalCustomers').textContent = customers.length;
+                document.getElementById('totalProducts').textContent = products.length;
+                document.getElementById('totalOrders').textContent = orders.length;
+
+                // Calculate revenue
+                const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+                document.getElementById('totalRevenue').textContent = formatCurrency(revenue);
+
+                // Display recent orders
+                const recentOrders = orders.slice(0, 5);
+                tbody.innerHTML = '';
+                
+                if (recentOrders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Chưa có đơn hàng nào</td></tr>';
+                } else {
+                    recentOrders.forEach(order => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>#${String(order.id).substring(0, 8)}</td>
+                            <td>${order.customer || 'N/A'}</td>
+                            <td>${order.items?.length || 0} sản phẩm</td>
+                            <td>${formatCurrency(order.total || 0)}</td>
+                            <td>${formatDate(order.date)}</td>
+                            <td><span class="badge ${order.status}">${order.status || 'pending'}</span></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                document.getElementById('totalCustomers').textContent = 'Lỗi';
+                document.getElementById('totalProducts').textContent = 'Lỗi';
+                document.getElementById('totalOrders').textContent = 'Lỗi';
+                document.getElementById('totalRevenue').textContent = 'Lỗi';
+                
+                const tbody = document.querySelector('#recentOrders tbody');
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">Không thể tải dữ liệu. Vui lòng kiểm tra kết nối API.</td></tr>';
+            }
+        });
+    </script>
+</body>
+</html>
+

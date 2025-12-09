@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Giỏ hàng - Admin Panel</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .carts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .search-container {
+            flex: 1;
+            min-width: 250px;
+            position: relative;
+        }
+        
+        .search-container input {
+            width: 100%;
+            padding: 12px 40px 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .search-container input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-dashboard {
+            padding: 12px 24px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-dashboard:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+        
+        .btn-delete {
+            padding: 6px 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        
+        .items-detail {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        @media (max-width: 768px) {
+            .carts-header {
+                flex-direction: column;
+            }
+            
+            .action-buttons {
+                width: 100%;
+            }
+            
+            .btn-dashboard {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Quản lý Giỏ hàng</h1>
+                <p class="admin-info"></p>
+            </div>
+            <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="dashboard.html" class="nav-item">Dashboard</a>
+            <a href="manage-customers.html" class="nav-item">Quản lý Khách hàng</a>
+            <a href="manage-orders.html" class="nav-item">Quản lý Đơn hàng</a>
+            <a href="manage-products.html" class="nav-item">Quản lý Sản phẩm</a>
+            <a href="manage-carts.html" class="nav-item active">Quản lý Giỏ hàng</a>
+        </nav>
+
+        <div class="content-box">
+            <div class="carts-header">
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="🔍 Tìm kiếm theo khách hàng..." onkeyup="searchCarts()">
+                </div>
+                <div class="action-buttons">
+                    <button class="btn-dashboard" onclick="window.location.href='dashboard.html'">
+                        📊 Về Dashboard
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table id="cartsTable">
+                    <thead>
+                        <tr>
+                            <th>KHÁCH HÀNG</th>
+                            <th>SỐ SẢN PHẨM</th>
+                            <th>TỔNG SỐ LƯỢNG</th>
+                            <th>TỔNG TIỀN</th>
+                            <th>NGÀY TẠO</th>
+                            <th>THAO TÁC</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        let allCarts = [];
+
+        // Load carts
+        async function loadCarts() {
+            const tbody = document.querySelector('#cartsTable tbody');
+            showLoading('cartsTable');
+            
+            try {
+                console.log('=== BẮT ĐẦU LOAD CARTS ===');
+                console.log('API Base URL:', API_CONFIG.BASE_URL);
+                
+                // Test API connection first
+                const testUrl = `${API_CONFIG.BASE_URL.replace('/api', '')}/health`;
+                console.log('Testing health endpoint:', testUrl);
+                
+                try {
+                    const healthCheck = await fetch(testUrl);
+                    const healthData = await healthCheck.json();
+                    console.log('Health check result:', healthData);
+                } catch (healthError) {
+                    console.error('Health check failed:', healthError);
+                    showError('cartsTable', `Không thể kết nối API server. Kiểm tra: ${API_CONFIG.BASE_URL.replace('/api', '')}`);
+                    return;
+                }
+                
+                // Load carts
+                console.log('Calling API: GET /api/cart');
+                const cartsResponse = await fetch(`${API_CONFIG.BASE_URL}/cart`);
+                console.log('Response status:', cartsResponse.status, cartsResponse.statusText);
+                
+                if (!cartsResponse.ok) {
+                    const errorText = await cartsResponse.text();
+                    console.error('API Error Response:', errorText);
+                    throw new Error(`API Error ${cartsResponse.status}: ${errorText}`);
+                }
+                
+                const contentType = cartsResponse.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+                
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await cartsResponse.text();
+                    console.error('Response is not JSON:', text);
+                    throw new Error('Response không phải JSON format');
+                }
+                
+                const rawData = await cartsResponse.json();
+                console.log('Raw API Response:', rawData);
+                
+                // Parse carts
+                let carts = [];
+                if (rawData.success && Array.isArray(rawData.data)) {
+                    carts = rawData.data;
+                    console.log('Found carts in data array:', carts.length);
+                } else if (Array.isArray(rawData)) {
+                    carts = rawData;
+                    console.log('Found carts as direct array:', carts.length);
+                } else if (rawData.data && Array.isArray(rawData.data)) {
+                    carts = rawData.data;
+                    console.log('Found carts in data field:', carts.length);
+                } else {
+                    console.warn('Unexpected response format:', rawData);
+                    carts = [];
+                }
+                
+                console.log('Parsed carts:', carts);
+                
+                // Transform carts data
+                const transformedCarts = carts.map(cart => {
+                    // Handle user_id - can be ObjectId string or populated object
+                    let customerName = 'N/A';
+                    if (cart.user_id) {
+                        if (typeof cart.user_id === 'object' && cart.user_id !== null) {
+                            customerName = cart.user_id.ho_ten || cart.user_id.email || cart.user_id.toString();
+                        } else {
+                            customerName = cart.user_id.toString();
+                        }
+                    }
+                    
+                    // Calculate total
+                    const total = cart.items?.reduce((sum, item) => {
+                        return sum + ((item.gia || 0) * (item.so_luong || 0));
+                    }, 0) || 0;
+                    
+                    return {
+                        id: cart._id || cart.id,
+                        _id: cart._id || cart.id,
+                        customer: customerName,
+                        customerId: typeof cart.user_id === 'object' ? (cart.user_id?._id || cart.user_id) : cart.user_id,
+                        items: cart.items || [],
+                        total: total,
+                        itemCount: cart.items?.length || 0,
+                        totalQuantity: cart.items?.reduce((sum, item) => sum + (item.so_luong || 0), 0) || 0,
+                        date: cart.createdAt || cart.updatedAt || new Date()
+                    };
+                });
+                
+                console.log('Transformed carts:', transformedCarts);
+                
+                allCarts = transformedCarts;
+                
+                // Display carts
+                displayCarts(allCarts);
+                
+                console.log('=== HOÀN THÀNH LOAD CARTS ===');
+            } catch (error) {
+                console.error('=== LỖI LOAD CARTS ===');
+                console.error('Error:', error);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+                showError('cartsTable', `Lỗi: ${error.message}. Mở Console (F12) để xem chi tiết.`);
+            }
+        }
+
+        // Display carts
+        function displayCarts(carts) {
+            const tbody = document.querySelector('#cartsTable tbody');
+            tbody.innerHTML = '';
+            
+            if (carts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Chưa có giỏ hàng nào trong database</td></tr>';
+                return;
+            }
+            
+            carts.forEach(cart => {
+                const row = document.createElement('tr');
+                const itemsDetail = cart.items && cart.items.length > 0 
+                    ? cart.items.map(item => {
+                        const productName = item.san_pham_id?.ten_san_pham || 'N/A';
+                        return `${productName} (x${item.so_luong || 0})`;
+                    }).join(', ')
+                    : 'Không có sản phẩm';
+                
+                row.innerHTML = `
+                    <td>${cart.customer || 'N/A'}</td>
+                    <td>${cart.itemCount || 0}</td>
+                    <td>${cart.totalQuantity || 0}</td>
+                    <td>${formatCurrency(cart.total || 0)}</td>
+                    <td>${formatDate(cart.date)}</td>
+                    <td>
+                        <button class="btn-delete" onclick="deleteCart('${cart.id || cart._id}')" title="Xóa giỏ hàng">Xóa</button>
+                        <div class="items-detail" style="margin-top: 5px; font-size: 11px;">${itemsDetail.substring(0, 50)}${itemsDetail.length > 50 ? '...' : ''}</div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            console.log(`✅ Hiển thị ${carts.length} giỏ hàng`);
+        }
+
+        // Search carts
+        function searchCarts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allCarts.filter(cart => {
+                const customer = (cart.customer || '').toLowerCase();
+                return customer.includes(searchTerm);
+            });
+            displayCarts(filtered);
+        }
+
+        // Delete cart
+        async function deleteCart(cartId) {
+            if (!confirm('Bạn có chắc chắn muốn xóa giỏ hàng này?')) {
+                return;
+            }
+            
+            try {
+                // Note: API có thể cần user_id để xóa, nhưng ta có thể thử xóa trực tiếp
+                // Hoặc cần thêm endpoint DELETE /api/cart/:id cho admin
+                alert('Chức năng xóa giỏ hàng cần được thêm vào API. Hiện tại API chỉ hỗ trợ xóa theo user_id.');
+                // await apiCall(`/cart/${cartId}`, { method: 'DELETE' });
+                // alert('Xóa giỏ hàng thành công!');
+                // loadCarts();
+            } catch (error) {
+                alert('Lỗi: ' + (error.message || 'Không thể xóa giỏ hàng'));
+            }
+        }
+
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', loadCarts);
+    </script>
+</body>
+</html>
+

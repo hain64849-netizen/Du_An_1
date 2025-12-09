@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API Connection - Admin Panel</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .test-item {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-item h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .data-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .btn-test {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .btn-test:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Kiểm tra kết nối API</h1>
+        <p>Trang này giúp kiểm tra kết nối với API BanGiay và xem dữ liệu được load.</p>
+        
+        <div class="test-item">
+            <h3>1. Kiểm tra API Base URL <span class="status loading" id="urlStatus">Đang kiểm tra...</span></h3>
+            <p id="urlInfo"></p>
+        </div>
+
+        <div class="test-item">
+            <h3>2. Test kết nối Health Check <span class="status loading" id="healthStatus">Chưa test</span></h3>
+            <p id="healthInfo"></p>
+        </div>
+
+        <div class="test-item">
+            <h3>3. Load Khách hàng (Users) <span class="status loading" id="customersStatus">Chưa test</span></h3>
+            <p id="customersInfo"></p>
+            <div class="data-preview" id="customersPreview"></div>
+        </div>
+
+        <div class="test-item">
+            <h3>4. Load Đơn hàng (Orders) <span class="status loading" id="ordersStatus">Chưa test</span></h3>
+            <p id="ordersInfo"></p>
+            <div class="data-preview" id="ordersPreview"></div>
+        </div>
+
+        <div class="test-item">
+            <h3>5. Load Sản phẩm (Products) <span class="status loading" id="productsStatus">Chưa test</span></h3>
+            <p id="productsInfo"></p>
+            <div class="data-preview" id="productsPreview"></div>
+        </div>
+
+        <button class="btn-test" onclick="runAllTests()">Chạy tất cả tests</button>
+        <button class="btn-test" onclick="location.href='index.html'" style="background: #6c757d; margin-left: 10px;">Quay lại đăng nhập</button>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // Check API URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlStatus = document.getElementById('urlStatus');
+            const urlInfo = document.getElementById('urlInfo');
+            
+            urlInfo.textContent = `API Base URL: ${API_CONFIG.BASE_URL}`;
+            urlStatus.textContent = 'Đã cấu hình';
+            urlStatus.className = 'status success';
+        });
+
+        async function testHealthCheck() {
+            const healthStatus = document.getElementById('healthStatus');
+            const healthInfo = document.getElementById('healthInfo');
+            
+            healthStatus.textContent = 'Đang kiểm tra...';
+            healthStatus.className = 'status loading';
+            
+            try {
+                const response = await fetch(`${API_CONFIG.BASE_URL.replace('/api', '')}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    healthStatus.textContent = 'Thành công';
+                    healthStatus.className = 'status success';
+                    healthInfo.innerHTML = `
+                        <strong>Status:</strong> ${data.status}<br>
+                        <strong>Database:</strong> ${data.database}<br>
+                        <strong>Products:</strong> ${data.products?.total || 0} (Active: ${data.products?.active || 0})<br>
+                        <strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString('vi-VN')}
+                    `;
+                } else {
+                    throw new Error('Health check failed');
+                }
+            } catch (error) {
+                healthStatus.textContent = 'Lỗi';
+                healthStatus.className = 'status error';
+                healthInfo.textContent = `Lỗi: ${error.message}. Kiểm tra xem API server có đang chạy không.`;
+            }
+        }
+
+        async function testCustomers() {
+            const customersStatus = document.getElementById('customersStatus');
+            const customersInfo = document.getElementById('customersInfo');
+            const customersPreview = document.getElementById('customersPreview');
+            
+            customersStatus.textContent = 'Đang tải...';
+            customersStatus.className = 'status loading';
+            
+            try {
+                const customers = await loadData('customers');
+                customersStatus.textContent = `Thành công (${customers.length} khách hàng)`;
+                customersStatus.className = 'status success';
+                customersInfo.textContent = `Đã load ${customers.length} khách hàng từ API.`;
+                
+                if (customers.length > 0) {
+                    customersPreview.textContent = JSON.stringify(customers.slice(0, 3), null, 2);
+                } else {
+                    customersPreview.textContent = 'Không có dữ liệu';
+                }
+            } catch (error) {
+                customersStatus.textContent = 'Lỗi';
+                customersStatus.className = 'status error';
+                customersInfo.textContent = `Lỗi: ${error.message}`;
+                customersPreview.textContent = error.stack || error.toString();
+            }
+        }
+
+        async function testOrders() {
+            const ordersStatus = document.getElementById('ordersStatus');
+            const ordersInfo = document.getElementById('ordersInfo');
+            const ordersPreview = document.getElementById('ordersPreview');
+            
+            ordersStatus.textContent = 'Đang tải...';
+            ordersStatus.className = 'status loading';
+            
+            try {
+                const orders = await loadData('orders');
+                ordersStatus.textContent = `Thành công (${orders.length} đơn hàng)`;
+                ordersStatus.className = 'status success';
+                ordersInfo.textContent = `Đã load ${orders.length} đơn hàng từ API.`;
+                
+                if (orders.length > 0) {
+                    ordersPreview.textContent = JSON.stringify(orders.slice(0, 2), null, 2);
+                } else {
+                    ordersPreview.textContent = 'Không có dữ liệu';
+                }
+            } catch (error) {
+                ordersStatus.textContent = 'Lỗi';
+                ordersStatus.className = 'status error';
+                ordersInfo.textContent = `Lỗi: ${error.message}`;
+                ordersPreview.textContent = error.stack || error.toString();
+            }
+        }
+
+        async function testProducts() {
+            const productsStatus = document.getElementById('productsStatus');
+            const productsInfo = document.getElementById('productsInfo');
+            const productsPreview = document.getElementById('productsPreview');
+            
+            productsStatus.textContent = 'Đang tải...';
+            productsStatus.className = 'status loading';
+            
+            try {
+                const products = await loadData('products');
+                productsStatus.textContent = `Thành công (${products.length} sản phẩm)`;
+                productsStatus.className = 'status success';
+                productsInfo.textContent = `Đã load ${products.length} sản phẩm từ API.`;
+                
+                if (products.length > 0) {
+                    productsPreview.textContent = JSON.stringify(products.slice(0, 2), null, 2);
+                } else {
+                    productsPreview.textContent = 'Không có dữ liệu';
+                }
+            } catch (error) {
+                productsStatus.textContent = 'Lỗi';
+                productsStatus.className = 'status error';
+                productsInfo.textContent = `Lỗi: ${error.message}`;
+                productsPreview.textContent = error.stack || error.toString();
+            }
+        }
+
+        async function runAllTests() {
+            await testHealthCheck();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testCustomers();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testOrders();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testProducts();
+        }
+
+        // Auto run tests on load
+        window.addEventListener('load', function() {
+            setTimeout(runAllTests, 1000);
+        });
+    </script>
+</body>
+</html>
+
+

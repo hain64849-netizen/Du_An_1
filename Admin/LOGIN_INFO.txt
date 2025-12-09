@@ -1,0 +1,22 @@
+========================================
+THÔNG TIN ĐĂNG NHẬP ADMIN
+========================================
+
+Tài khoản Admin:
+----------------
+Tên đăng nhập: admin
+Mật khẩu: admin123
+
+Vai trò: Super Admin
+Tên hiển thị: Administrator
+
+========================================
+LƯU Ý:
+- Đây là tài khoản mặc định
+- Vui lòng đổi mật khẩu sau khi đăng nhập
+- Thông tin này được lưu trong file admin.js
+- Để thêm tài khoản admin mới, chỉnh sửa mảng ADMIN_ACCOUNTS trong admin.js
+
+========================================
+
+

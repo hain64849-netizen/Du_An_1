@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Đơn hàng - Admin Panel</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Quản lý Đơn hàng</h1>
+                <p class="admin-info"></p>
+            </div>
+            <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="dashboard.html" class="nav-item">Dashboard</a>
+            <a href="manage-customers.html" class="nav-item">Quản lý Khách hàng</a>
+            <a href="manage-orders.html" class="nav-item active">Quản lý Đơn hàng</a>
+            <a href="manage-products.html" class="nav-item">Quản lý Sản phẩm</a>
+            <a href="manage-carts.html" class="nav-item">Quản lý Giỏ hàng</a>
+        </nav>
+
+        <div class="content-box">
+            <h2>Danh sách đơn hàng</h2>
+            <div class="table-container">
+                <table id="ordersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Khách hàng</th>
+                            <th>Số sản phẩm</th>
+                            <th>Tổng tiền</th>
+                            <th>Ngày đặt</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // Load orders function
+        async function loadOrdersData() {
+            const tbody = document.querySelector('#ordersTable tbody');
+            showLoading('ordersTable');
+            
+            try {
+                console.log('=== BẮT ĐẦU LOAD ORDERS ===');
+                console.log('API Base URL:', API_CONFIG.BASE_URL);
+                
+                // Test API connection first
+                const testUrl = `${API_CONFIG.BASE_URL.replace('/api', '')}/health`;
+                console.log('Testing health endpoint:', testUrl);
+                
+                try {
+                    const healthCheck = await fetch(testUrl);
+                    const healthData = await healthCheck.json();
+                    console.log('Health check result:', healthData);
+                } catch (healthError) {
+                    console.error('Health check failed:', healthError);
+                    showError('ordersTable', `Không thể kết nối API server. Kiểm tra: ${API_CONFIG.BASE_URL.replace('/api', '')}`);
+                    return;
+                }
+                
+                // Load orders
+                console.log('Calling API: GET /api/order');
+                const ordersResponse = await fetch(`${API_CONFIG.BASE_URL}/order`);
+                console.log('Response status:', ordersResponse.status, ordersResponse.statusText);
+                
+                if (!ordersResponse.ok) {
+                    const errorText = await ordersResponse.text();
+                    console.error('API Error Response:', errorText);
+                    throw new Error(`API Error ${ordersResponse.status}: ${errorText}`);
+                }
+                
+                const contentType = ordersResponse.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+                
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await ordersResponse.text();
+                    console.error('Response is not JSON:', text);
+                    throw new Error('Response không phải JSON format');
+                }
+                
+                const rawData = await ordersResponse.json();
+                console.log('Raw API Response:', rawData);
+                
+                // Parse orders
+                let orders = [];
+                if (rawData.success && Array.isArray(rawData.data)) {
+                    orders = rawData.data;
+                    console.log('Found orders in data array:', orders.length);
+                } else if (Array.isArray(rawData)) {
+                    orders = rawData;
+                    console.log('Found orders as direct array:', orders.length);
+                } else if (rawData.data && Array.isArray(rawData.data)) {
+                    orders = rawData.data;
+                    console.log('Found orders in data field:', orders.length);
+                } else {
+                    console.warn('Unexpected response format:', rawData);
+                    orders = [];
+                }
+                
+                console.log('Parsed orders:', orders);
+                
+                // Transform orders
+                const transformedOrders = orders.map(order => {
+                    // Handle user_id - can be ObjectId string or populated object
+                    let customerName = 'N/A';
+                    if (order.user_id) {
+                        if (typeof order.user_id === 'object' && order.user_id !== null) {
+                            customerName = order.user_id.ho_ten || order.user_id.email || order.user_id.toString();
+                        } else {
+                            customerName = order.user_id.toString();
+                        }
+                    }
+                    
+                    return {
+                        id: order._id || order.id,
+                        _id: order._id || order.id,
+                        customer: customerName,
+                        customerId: typeof order.user_id === 'object' ? (order.user_id?._id || order.user_id) : order.user_id,
+                        items: order.items || [],
+                        total: order.tong_tien || 0,
+                        date: order.createdAt || order.updatedAt || new Date(),
+                        status: order.trang_thai || 'pending',
+                        address: order.dia_chi_giao_hang || '',
+                        phone: order.so_dien_thoai || ''
+                    };
+                });
+                
+                console.log('Transformed orders:', transformedOrders);
+                
+                // Display orders
+                tbody.innerHTML = '';
+                
+                if (transformedOrders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">Chưa có đơn hàng nào trong database</td></tr>';
+                } else {
+                    transformedOrders.forEach(order => {
+                        const row = document.createElement('tr');
+                        const orderId = String(order.id || order._id || '').substring(0, 8);
+                        row.innerHTML = `
+                            <td>#${orderId}</td>
+                            <td>${order.customer || 'N/A'}</td>
+                            <td>${order.items?.length || 0}</td>
+                            <td>${formatCurrency(order.total || 0)}</td>
+                            <td>${formatDate(order.date)}</td>
+                            <td><span class="badge ${order.status}">${getStatusName(order.status || 'pending')}</span></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    console.log(`✅ Hiển thị ${transformedOrders.length} đơn hàng`);
+                }
+                
+                console.log('=== HOÀN THÀNH LOAD ORDERS ===');
+            } catch (error) {
+                console.error('=== LỖI LOAD ORDERS ===');
+                console.error('Error:', error);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+                showError('ordersTable', `Lỗi: ${error.message}. Mở Console (F12) để xem chi tiết.`);
+            }
+        }
+        
+        function getStatusName(status) {
+            const statusMap = {
+                'pending': 'Chờ xử lý',
+                'confirmed': 'Đã xác nhận',
+                'shipping': 'Đang giao',
+                'delivered': 'Đã giao',
+                'cancelled': 'Đã hủy'
+            };
+            return statusMap[status] || status;
+        }
+        
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', loadOrdersData);
+    </script>
+</body>
+</html>
+

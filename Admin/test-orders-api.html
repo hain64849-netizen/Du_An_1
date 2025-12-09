@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Orders API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #667eea;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Orders API Connection</h1>
+        
+        <div class="test-section">
+            <h2>1. Kiểm tra API Base URL</h2>
+            <p>API Base URL: <strong id="apiUrl"></strong></p>
+            <button onclick="testConnection()">Test Connection</button>
+            <div id="connectionResult"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. Test GET /api/order</h2>
+            <button onclick="testGetOrders()">Get All Orders</button>
+            <div id="ordersResult"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. Console Logs</h2>
+            <p>Mở Developer Tools (F12) để xem chi tiết logs</p>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // Show API URL
+        document.getElementById('apiUrl').textContent = API_CONFIG.BASE_URL;
+        
+        async function testConnection() {
+            const resultDiv = document.getElementById('connectionResult');
+            resultDiv.innerHTML = '<p>Đang kiểm tra...</p>';
+            
+            try {
+                const response = await fetch(`${API_CONFIG.BASE_URL.replace('/api', '')}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Kết nối thành công!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ Lỗi: ${response.status}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">❌ Lỗi kết nối: ${error.message}</p>
+                    <p>Kiểm tra:</p>
+                    <ul>
+                        <li>API server có đang chạy không?</li>
+                        <li>URL có đúng không? (${API_CONFIG.BASE_URL})</li>
+                        <li>CORS có được cấu hình đúng không?</li>
+                    </ul>
+                `;
+            }
+        }
+        
+        async function testGetOrders() {
+            const resultDiv = document.getElementById('ordersResult');
+            resultDiv.innerHTML = '<p>Đang tải dữ liệu...</p>';
+            
+            try {
+                console.log('=== Testing GET /api/order ===');
+                const response = await fetch(`${API_CONFIG.BASE_URL}/order`);
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
+                
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+                
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Response không phải JSON</p>
+                        <pre>${text}</pre>
+                    `;
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok) {
+                    const orders = data.success && data.data ? data.data : (Array.isArray(data) ? data : []);
+                    
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Tải thành công! Tìm thấy ${orders.length} đơn hàng</p>
+                        <p><strong>Response structure:</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <p><strong>Orders array (first 3):</strong></p>
+                        <pre>${JSON.stringify(orders.slice(0, 3), null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Lỗi: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `
+                    <p class="error">❌ Lỗi: ${error.message}</p>
+                    <pre>${error.stack}</pre>
+                `;
+            }
+        }
+        
+        // Auto test on load
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                testConnection();
+                setTimeout(() => testGetOrders(), 1000);
+            }, 500);
+        });
+    </script>
+</body>
+</html>
+
