@@ -30,6 +30,7 @@ import com.poly.ban_giay_app.network.ApiClient;
 import com.poly.ban_giay_app.network.ApiService;
 import com.poly.ban_giay_app.network.NetworkUtils;
 import com.poly.ban_giay_app.network.model.BaseResponse;
+import com.poly.ban_giay_app.network.model.NotificationListResponse;
 import com.poly.ban_giay_app.network.model.ProductListResponse;
 import com.poly.ban_giay_app.network.model.ProductResponse;
 
@@ -45,6 +46,8 @@ public class MainActivity extends AppCompatActivity {
     private View navAccount;
     private ImageView imgAccountIcon;
     private TextView tvAccountLabel;
+    private ImageView imgBell;
+    private TextView txtNotificationBadge;
 
     // RecyclerViews and Adapters for products
     private RecyclerView rvTop, rvMen, rvSearchResults;
@@ -72,6 +75,9 @@ public class MainActivity extends AppCompatActivity {
         // Init account navigation
         initAccountNav();
         updateAccountNavUi();
+        
+        // Init notification icon
+        initNotificationIcon();
 
         // Apply insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -100,6 +106,68 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         updateAccountNavUi();
+        loadNotificationCount();
+    }
+    
+    private void initNotificationIcon() {
+        imgBell = findViewById(R.id.imgBell);
+        txtNotificationBadge = findViewById(R.id.txtNotificationBadge);
+        
+        if (imgBell != null) {
+            imgBell.setOnClickListener(v -> {
+                Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
+                startActivity(intent);
+            });
+        }
+    }
+    
+    private void loadNotificationCount() {
+        if (!sessionManager.isLoggedIn()) {
+            updateNotificationBadge(0);
+            return;
+        }
+        String userId = sessionManager.getUserId();
+        if (userId == null || userId.isEmpty()) {
+            updateNotificationBadge(0);
+            return;
+        }
+
+        if (!NetworkUtils.isConnected(this)) {
+            return;
+        }
+
+        apiService.getNotifications(userId, false).enqueue(new Callback<BaseResponse<NotificationListResponse>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<NotificationListResponse>> call, Response<BaseResponse<NotificationListResponse>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().getSuccess()) {
+                    NotificationListResponse notificationData = response.body().getData();
+                    if (notificationData != null) {
+                        updateNotificationBadge(notificationData.getUnreadCount());
+                    } else {
+                        updateNotificationBadge(0);
+                    }
+                } else {
+                    updateNotificationBadge(0);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<NotificationListResponse>> call, Throwable t) {
+                Log.e("MainActivity", "Error loading notification count: " + t.getMessage());
+                updateNotificationBadge(0);
+            }
+        });
+    }
+    
+    private void updateNotificationBadge(int count) {
+        if (txtNotificationBadge != null) {
+            if (count > 0) {
+                txtNotificationBadge.setText(count > 99 ? "99+" : String.valueOf(count));
+                txtNotificationBadge.setVisibility(View.VISIBLE);
+            } else {
+                txtNotificationBadge.setVisibility(View.GONE);
+            }
+        }
     }
 
     private void initAccountNav() {

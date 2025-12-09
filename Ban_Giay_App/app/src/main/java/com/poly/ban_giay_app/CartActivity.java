@@ -33,6 +33,7 @@ import com.poly.ban_giay_app.network.NetworkUtils;
 import com.poly.ban_giay_app.models.Product;
 import com.poly.ban_giay_app.network.model.BaseResponse;
 import com.poly.ban_giay_app.network.model.CartResponse;
+import com.poly.ban_giay_app.network.model.NotificationListResponse;
 import com.poly.ban_giay_app.network.model.OrderResponse;
 import com.poly.ban_giay_app.network.model.ProductResponse;
 import com.poly.ban_giay_app.network.request.OrderRequest;
@@ -55,6 +56,7 @@ public class CartActivity extends AppCompatActivity {
     private LinearLayout layoutSelectAll, layoutBottom, layoutEmptyCart;
     private EditText edtSearch;
     private ImageView imgBell;
+    private TextView txtNotificationBadge;
     private ImageView btnBack;
     private ImageView btnViewOrders;
     private View navAccount;
@@ -107,6 +109,7 @@ public class CartActivity extends AppCompatActivity {
         // Chỉ load từ API, không dùng local cart
         loadCartFromServer();
         updateAccountNavUi();
+        loadNotificationCount();
     }
 
     @Override
@@ -160,6 +163,7 @@ public class CartActivity extends AppCompatActivity {
         layoutEmptyCart = findViewById(R.id.layoutEmptyCart);
         edtSearch = findViewById(R.id.edtSearch);
         imgBell = findViewById(R.id.imgBell);
+        txtNotificationBadge = findViewById(R.id.txtNotificationBadge);
         btnBack = findViewById(R.id.btnBack);
         btnViewOrders = findViewById(R.id.btnViewOrders);
     }
@@ -169,6 +173,14 @@ public class CartActivity extends AppCompatActivity {
         if (btnBack != null) {
             btnBack.setOnClickListener(v -> {
                 finish(); // Quay về màn hình trước
+            });
+        }
+
+        // Notification bell icon
+        if (imgBell != null) {
+            imgBell.setOnClickListener(v -> {
+                Intent intent = new Intent(CartActivity.this, NotificationActivity.class);
+                startActivity(intent);
             });
         }
 
@@ -1022,11 +1034,15 @@ public class CartActivity extends AppCompatActivity {
                                 // Reload cart từ server để đồng bộ (server đã xóa items đã thanh toán)
                                 loadCartFromServer();
                                 
-                                // Chuyển đến màn hình đơn hàng sau một chút delay
+                                // Chuyển đến màn hình đơn hàng sau delay để đảm bảo server đã lưu xong
+                                // Tăng delay lên 1.5 giây để đảm bảo server đã lưu đơn hàng vào database
                                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                                    Log.d("CartActivity", "Navigating to OrderActivity after order creation");
                                     Intent intent = new Intent(CartActivity.this, OrderActivity.class);
+                                    // Thêm flag để OrderActivity biết cần reload ngay
+                                    intent.putExtra("shouldReload", true);
                                     startActivity(intent);
-                                }, 500);
+                                }, 1500);
                             } else {
                                 String errorMsg = body.getMessage() != null ? body.getMessage() : "Không thể tạo đơn hàng";
                                 Log.e("CartActivity", "❌ Order creation failed: " + errorMsg);
@@ -1106,6 +1122,55 @@ public class CartActivity extends AppCompatActivity {
                 btnCheckout.setText("Thanh toán");
             }
             Toast.makeText(this, "Lỗi khi tạo đơn hàng: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void loadNotificationCount() {
+        if (!sessionManager.isLoggedIn()) {
+            updateNotificationBadge(0);
+            return;
+        }
+        String userId = sessionManager.getUserId();
+        if (userId == null || userId.isEmpty()) {
+            updateNotificationBadge(0);
+            return;
+        }
+
+        if (!NetworkUtils.isConnected(this)) {
+            return;
+        }
+
+        apiService.getNotifications(userId, false).enqueue(new Callback<BaseResponse<NotificationListResponse>>() {
+            @Override
+            public void onResponse(Call<BaseResponse<NotificationListResponse>> call, Response<BaseResponse<NotificationListResponse>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().getSuccess()) {
+                    NotificationListResponse notificationData = response.body().getData();
+                    if (notificationData != null) {
+                        updateNotificationBadge(notificationData.getUnreadCount());
+                    } else {
+                        updateNotificationBadge(0);
+                    }
+                } else {
+                    updateNotificationBadge(0);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<BaseResponse<NotificationListResponse>> call, Throwable t) {
+                Log.e("CartActivity", "Error loading notification count: " + t.getMessage());
+                updateNotificationBadge(0);
+            }
+        });
+    }
+
+    private void updateNotificationBadge(int count) {
+        if (txtNotificationBadge != null) {
+            if (count > 0) {
+                txtNotificationBadge.setText(count > 99 ? "99+" : String.valueOf(count));
+                txtNotificationBadge.setVisibility(View.VISIBLE);
+            } else {
+                txtNotificationBadge.setVisibility(View.GONE);
+            }
         }
     }
 }

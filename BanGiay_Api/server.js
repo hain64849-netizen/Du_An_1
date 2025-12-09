@@ -84,6 +84,9 @@ app.use("/api/cart", require("./routes/cart.routes"));
 // Order APIs
 app.use("/api/order", require("./routes/order.routes"));
 
+// Notification APIs
+app.use("/api/notification", require("./routes/notification.routes"));
+
 // Payment APIs
 app.use("/api/payment", require("./routes/payment.routes"));
 

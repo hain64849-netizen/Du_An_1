@@ -3,6 +3,7 @@ package com.poly.ban_giay_app.network.model;
 import com.google.gson.annotations.SerializedName;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Model để map với dữ liệu đơn hàng từ MongoDB
@@ -11,8 +12,9 @@ public class OrderResponse {
     @SerializedName("_id")
     private String id;
 
+    // user_id có thể là string ID hoặc object (ObjectId từ MongoDB)
     @SerializedName("user_id")
-    private String userId;
+    private Object userIdRaw;
 
     @SerializedName("items")
     private List<OrderItemResponse> items;
@@ -103,12 +105,46 @@ public class OrderResponse {
         this.id = id;
     }
 
+    /**
+     * Get user_id - xử lý cả string và object (ObjectId từ MongoDB)
+     */
     public String getUserId() {
-        return userId;
+        if (userIdRaw == null) {
+            return null;
+        }
+        
+        // Nếu là string, trả về trực tiếp
+        if (userIdRaw instanceof String) {
+            return (String) userIdRaw;
+        }
+        
+        // Nếu là Map (ObjectId từ MongoDB), lấy $oid hoặc toString
+        if (userIdRaw instanceof Map) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> idMap = (Map<String, Object>) userIdRaw;
+                if (idMap.containsKey("$oid")) {
+                    return idMap.get("$oid").toString();
+                } else if (idMap.containsKey("_id")) {
+                    Object idObj = idMap.get("_id");
+                    if (idObj != null) {
+                        return idObj.toString();
+                    }
+                }
+                // Nếu không có $oid hoặc _id, thử toString
+                return userIdRaw.toString();
+            } catch (Exception e) {
+                android.util.Log.e("OrderResponse", "Error extracting user_id from Map: " + e.getMessage(), e);
+                return userIdRaw.toString();
+            }
+        }
+        
+        // Các trường hợp khác, convert sang string
+        return userIdRaw.toString();
     }
 
     public void setUserId(String userId) {
-        this.userId = userId;
+        this.userIdRaw = userId;
     }
 
     public List<OrderItemResponse> getItems() {

@@ -1,4 +1,6 @@
 const Product = require("../models/Product");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
 
 /**
  * Lấy tất cả sản phẩm (có phân trang và lọc)
@@ -294,6 +296,45 @@ exports.createProduct = async (req, res) => {
     await newProduct.save();
     
     console.log(`✅ Product created: ${newProduct.ten_san_pham} (ID: ${newProduct._id})`);
+    
+    // Tạo thông báo cho tất cả users về sản phẩm mới
+    try {
+      console.log("🔔 Starting to create notifications for new product...");
+      const users = await User.find({}).select("_id");
+      console.log(`🔔 Found ${users.length} users to notify about new product`);
+      
+      if (users.length === 0) {
+        console.log("⚠️ No users found, skipping notification creation");
+      } else {
+        const notifications = users.map(user => ({
+          user_id: user._id,
+          loai: "new_product",
+          tieu_de: "Sản phẩm mới",
+          noi_dung: `Sản phẩm "${newProduct.ten_san_pham}" vừa được thêm vào cửa hàng. Hãy khám phá ngay!`,
+          duong_dan: `/product/${newProduct._id}`,
+          metadata: {
+            product_id: newProduct._id.toString(),
+            product_name: newProduct.ten_san_pham,
+          },
+          da_doc: false,
+        }));
+
+        console.log(`📝 Prepared ${notifications.length} notifications to insert`);
+        
+        if (notifications.length > 0) {
+          const result = await Notification.insertMany(notifications);
+          console.log(`✅ Successfully created ${result.length} notifications for new product`);
+          console.log(`   Product: ${newProduct.ten_san_pham}`);
+          console.log(`   Notified ${users.length} users`);
+        }
+      }
+    } catch (notifErr) {
+      console.error("❌ Failed to create notifications:", notifErr);
+      console.error("Error details:", notifErr.message);
+      console.error("Error stack:", notifErr.stack);
+      // Không fail request nếu tạo thông báo lỗi
+    }
+    
     console.log("==========================================\n");
     
     res.status(201).json({ 

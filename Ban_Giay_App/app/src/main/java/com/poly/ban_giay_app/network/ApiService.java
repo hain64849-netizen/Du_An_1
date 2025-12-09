@@ -2,6 +2,8 @@ package com.poly.ban_giay_app.network;
 
 import com.poly.ban_giay_app.network.model.AuthResponse;
 import com.poly.ban_giay_app.network.model.BaseResponse;
+import com.poly.ban_giay_app.network.model.NotificationListResponse;
+import com.poly.ban_giay_app.network.model.NotificationResponse;
 import com.poly.ban_giay_app.network.model.ProductListResponse;
 import com.poly.ban_giay_app.network.model.ProductResponse;
 import com.poly.ban_giay_app.network.model.UserResponse;
@@ -167,6 +169,25 @@ public interface ApiService {
     // Lấy tất cả sản phẩm (legacy)
     @GET("products")
     Call<BaseResponse<List<ProductResponse>>> getAllProducts();
+
+    // ==================== NOTIFICATION APIs ====================
+    // GET http://YOUR_IP:3000/api/notification?user_id=xxx&da_doc=false
+    // Lấy danh sách thông báo của user
+    @GET("notification")
+    Call<BaseResponse<NotificationListResponse>> getNotifications(
+            @Query("user_id") String userId,
+            @Query("da_doc") Boolean daDoc
+    );
+
+    // PUT http://YOUR_IP:3000/api/notification/{id}/read
+    // Đánh dấu thông báo đã đọc
+    @PUT("notification/{id}/read")
+    Call<BaseResponse<NotificationResponse>> markNotificationAsRead(@Path("id") String notificationId);
+
+    // PUT http://YOUR_IP:3000/api/notification/read-all?user_id=xxx
+    // Đánh dấu tất cả thông báo của user đã đọc
+    @PUT("notification/read-all")
+    Call<BaseResponse<Void>> markAllNotificationsAsRead(@Query("user_id") String userId);
 
     // ==================== PAYMENT APIs ====================
     // POST http://YOUR_IP:3000/api/payment

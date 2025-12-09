@@ -217,9 +217,25 @@
                     let customerName = 'N/A';
                     if (cart.user_id) {
                         if (typeof cart.user_id === 'object' && cart.user_id !== null) {
-                            customerName = cart.user_id.ho_ten || cart.user_id.email || cart.user_id.toString();
+                            // Nếu là object đã populate
+                            if (cart.user_id.ho_ten) {
+                                customerName = cart.user_id.ho_ten;
+                            } else if (cart.user_id.email) {
+                                customerName = cart.user_id.email;
+                            } else if (cart.user_id.ten_dang_nhap) {
+                                customerName = cart.user_id.ten_dang_nhap;
+                            } else if (cart.user_id._id) {
+                                customerName = cart.user_id._id.toString();
+                            } else {
+                                // Nếu không có trường nào, thử JSON.stringify để debug
+                                console.warn('Unknown user_id format:', cart.user_id);
+                                customerName = 'Khách hàng';
+                            }
+                        } else if (typeof cart.user_id === 'string') {
+                            // Nếu là string ID, giữ nguyên để hiển thị
+                            customerName = `User ID: ${cart.user_id}`;
                         } else {
-                            customerName = cart.user_id.toString();
+                            customerName = String(cart.user_id);
                         }
                     }
                     

@@ -77,7 +77,18 @@ public class OrderActivity extends AppCompatActivity {
         setupNavigation();
         setupTabs();
         updateTabButtons(); // Highlight tab "Tất cả" ngay từ đầu
-        loadOrders();
+        
+        // Kiểm tra xem có cần reload ngay không (từ CartActivity sau khi thanh toán)
+        boolean shouldReload = getIntent().getBooleanExtra("shouldReload", false);
+        if (shouldReload) {
+            // Delay nhỏ để đảm bảo UI đã render xong, sau đó reload
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                Log.d("OrderActivity", "Reloading orders after order creation");
+                loadOrders();
+            }, 300);
+        } else {
+            loadOrders();
+        }
     }
 
     @Override
@@ -175,8 +186,9 @@ public class OrderActivity extends AppCompatActivity {
         orderAdapter = new OrderAdapter(filteredOrders, new OrderAdapter.OnOrderListener() {
             @Override
             public void onViewDetail(OrderResponse order) {
-                // TODO: Navigate to order detail
-                Toast.makeText(OrderActivity.this, "Xem chi tiết đơn hàng #" + order.getId(), Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(OrderActivity.this, OrderDetailActivity.class);
+                intent.putExtra("order_id", order.getId());
+                startActivity(intent);
             }
 
             @Override
@@ -284,30 +296,73 @@ public class OrderActivity extends AppCompatActivity {
         apiService.getOrders(userId, null).enqueue(new Callback<BaseResponse<List<OrderResponse>>>() {
             @Override
             public void onResponse(Call<BaseResponse<List<OrderResponse>>> call, Response<BaseResponse<List<OrderResponse>>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    BaseResponse<List<OrderResponse>> body = response.body();
-                    if (body.getSuccess() && body.getData() != null) {
-                        allOrders.clear();
-                        allOrders.addAll(body.getData());
-                        Log.d("OrderActivity", "Loaded " + allOrders.size() + " orders");
-                        filterOrders(currentFilter);
-                    } else {
-                        Log.w("OrderActivity", "No orders found");
+                runOnUiThread(() -> {
+                    try {
+                        Log.d("OrderActivity", "=== API RESPONSE RECEIVED ===");
+                        Log.d("OrderActivity", "Response code: " + response.code());
+                        Log.d("OrderActivity", "Response isSuccessful: " + response.isSuccessful());
+                        Log.d("OrderActivity", "Response body is null: " + (response.body() == null));
+                        
+                        if (response.isSuccessful() && response.body() != null) {
+                            BaseResponse<List<OrderResponse>> body = response.body();
+                            Log.d("OrderActivity", "Response success: " + body.getSuccess());
+                            Log.d("OrderActivity", "Response data is null: " + (body.getData() == null));
+                            
+                            if (body.getSuccess() && body.getData() != null) {
+                                allOrders.clear();
+                                allOrders.addAll(body.getData());
+                                Log.d("OrderActivity", "✅ Loaded " + allOrders.size() + " orders");
+                                
+                                // Log từng đơn hàng để debug
+                                for (int i = 0; i < allOrders.size(); i++) {
+                                    OrderResponse order = allOrders.get(i);
+                                    Log.d("OrderActivity", "  Order " + i + ": ID=" + order.getId() + 
+                                          ", Status=" + order.getTrangThai() + 
+                                          ", Total=" + order.getTongTien() + 
+                                          ", Items=" + (order.getItems() != null ? order.getItems().size() : 0));
+                                }
+                                
+                                filterOrders(currentFilter);
+                            } else {
+                                Log.w("OrderActivity", "⚠️ No orders found or success=false");
+                                if (body.getData() == null) {
+                                    Log.w("OrderActivity", "Response data is null");
+                                }
+                                allOrders.clear();
+                                filterOrders(currentFilter);
+                            }
+                        } else {
+                            String errorMsg = NetworkUtils.extractErrorMessage(response);
+                            Log.e("OrderActivity", "❌ Failed to load orders: " + errorMsg);
+                            
+                            // Log error body nếu có
+                            if (response.errorBody() != null) {
+                                try {
+                                    String errorBody = response.errorBody().string();
+                                    Log.e("OrderActivity", "Error body: " + errorBody);
+                                } catch (Exception e) {
+                                    Log.e("OrderActivity", "Error reading error body", e);
+                                }
+                            }
+                            
+                            allOrders.clear();
+                            filterOrders(currentFilter);
+                        }
+                    } catch (Exception e) {
+                        Log.e("OrderActivity", "❌ Exception in onResponse", e);
                         allOrders.clear();
                         filterOrders(currentFilter);
                     }
-                } else {
-                    Log.e("OrderActivity", "Failed to load orders: " + NetworkUtils.extractErrorMessage(response));
-                    allOrders.clear();
-                    filterOrders(currentFilter);
-                }
+                });
             }
 
             @Override
             public void onFailure(Call<BaseResponse<List<OrderResponse>>> call, Throwable t) {
-                Log.e("OrderActivity", "Error loading orders: " + t.getMessage());
-                allOrders.clear();
-                filterOrders(currentFilter);
+                runOnUiThread(() -> {
+                    Log.e("OrderActivity", "❌ Error loading orders: " + t.getMessage(), t);
+                    allOrders.clear();
+                    filterOrders(currentFilter);
+                });
             }
         });
     }

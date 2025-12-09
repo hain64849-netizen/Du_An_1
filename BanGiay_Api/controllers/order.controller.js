@@ -1,6 +1,8 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const Product = require("../models/Product");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
 
 // Tạo đơn hàng mới từ giỏ hàng
 exports.createOrder = async (req, res) => {
@@ -121,26 +123,106 @@ exports.getOrders = async (req, res) => {
   try {
     const { user_id, trang_thai } = req.query;
 
+    console.log("=== GET ORDERS ===");
+    console.log("Query params:", { user_id, trang_thai });
+
     // Xây dựng query
     const query = {};
     if (user_id) {
-      query.user_id = user_id;
+      // Convert string user_id to ObjectId
+      const mongoose = require("mongoose");
+      if (!mongoose.Types.ObjectId.isValid(user_id)) {
+        console.error("❌ Invalid user_id format:", user_id);
+        return res.status(400).json({
+          success: false,
+          message: "user_id không hợp lệ",
+        });
+      }
+      query.user_id = new mongoose.Types.ObjectId(user_id);
+      console.log("Converted user_id to ObjectId:", query.user_id.toString());
     }
     if (trang_thai) {
       query.trang_thai = trang_thai;
     }
 
+    console.log("MongoDB query:", JSON.stringify(query));
+
     const orders = await Order.find(query)
       .sort({ createdAt: -1 }) // Mới nhất trước
-      .populate("items.san_pham_id", "ten_san_pham hinh_anh")
-      .populate("user_id", "ho_ten email so_dien_thoai");
+      .populate("items.san_pham_id", "ten_san_pham hinh_anh gia_goc gia_khuyen_mai")
+      .populate("user_id", "ho_ten email so_dien_thoai ten_dang_nhap");
+
+    console.log(`✅ Found ${orders.length} orders`);
+
+    // Format orders để khớp với OrderResponse model
+    // Dùng JSON.stringify/parse để đảm bảo ObjectId được convert thành string
+    const formattedOrders = orders.map(order => {
+      // Convert to plain object và serialize để convert ObjectId
+      const orderStr = JSON.stringify(order);
+      const orderObj = JSON.parse(orderStr);
+      
+      // Format items - QUAN TRỌNG: san_pham_id phải là string, không phải object
+      const formattedItems = (orderObj.items || []).map(item => {
+        // Xử lý san_pham_id - sau khi JSON.parse, nếu là object thì sẽ có _id
+        let sanPhamId = "";
+        if (item.san_pham_id) {
+          if (typeof item.san_pham_id === 'object' && item.san_pham_id._id) {
+            sanPhamId = String(item.san_pham_id._id);
+          } else if (typeof item.san_pham_id === 'object') {
+            sanPhamId = String(item.san_pham_id);
+          } else {
+            sanPhamId = String(item.san_pham_id);
+          }
+        }
+
+        return {
+          san_pham_id: sanPhamId, // PHẢI là string
+          ten_san_pham: item.ten_san_pham || "",
+          so_luong: item.so_luong || 0,
+          kich_thuoc: item.kich_thuoc || "",
+          gia: item.gia || 0,
+        };
+      });
+
+      // Xử lý user_id - đảm bảo là string
+      let userIdStr = "";
+      if (orderObj.user_id) {
+        if (typeof orderObj.user_id === 'object' && orderObj.user_id._id) {
+          userIdStr = String(orderObj.user_id._id);
+        } else if (typeof orderObj.user_id === 'object') {
+          userIdStr = String(orderObj.user_id);
+        } else {
+          userIdStr = String(orderObj.user_id);
+        }
+      }
+
+      return {
+        _id: String(orderObj._id || ""),
+        user_id: userIdStr,
+        items: formattedItems,
+        tong_tien: orderObj.tong_tien || 0,
+        trang_thai: orderObj.trang_thai || "pending",
+        dia_chi_giao_hang: orderObj.dia_chi_giao_hang || "",
+        so_dien_thoai: orderObj.so_dien_thoai || "",
+        ghi_chu: orderObj.ghi_chu || "",
+        createdAt: orderObj.createdAt,
+        updatedAt: orderObj.updatedAt,
+      };
+    });
+
+    console.log(`✅ Formatted ${formattedOrders.length} orders`);
+    if (formattedOrders.length > 0 && formattedOrders[0].items.length > 0) {
+      console.log("Sample item san_pham_id type:", typeof formattedOrders[0].items[0].san_pham_id);
+      console.log("Sample item san_pham_id value:", formattedOrders[0].items[0].san_pham_id);
+    }
 
     res.json({
       success: true,
-      data: orders,
+      data: formattedOrders,
+      count: formattedOrders.length,
     });
   } catch (err) {
-    console.error("Lỗi khi lấy danh sách đơn hàng:", err);
+    console.error("❌ Lỗi khi lấy danh sách đơn hàng:", err);
     res.status(500).json({
       success: false,
       error: err.message || "Lỗi server khi lấy danh sách đơn hàng",
@@ -153,10 +235,14 @@ exports.getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order = await Order.findById(orderId).populate(
-      "items.san_pham_id",
-      "ten_san_pham hinh_anh gia_goc gia_khuyen_mai"
-    );
+    console.log("=== GET ORDER BY ID ===");
+    console.log("Order ID:", orderId);
+
+    // Dùng lean() để lấy plain object, không phải Mongoose document
+    const order = await Order.findById(orderId)
+      .lean()
+      .populate("items.san_pham_id", "ten_san_pham hinh_anh gia_goc gia_khuyen_mai")
+      .populate("user_id", "ho_ten email so_dien_thoai ten_dang_nhap");
 
     if (!order) {
       return res.status(404).json({
@@ -165,9 +251,75 @@ exports.getOrderById = async (req, res) => {
       });
     }
 
+    // Format items - QUAN TRỌNG: san_pham_id phải là string, không phải object
+    // Sau khi populate, san_pham_id là object với _id bên trong
+    const formattedItems = (order.items || []).map(item => {
+      // Xử lý san_pham_id - nếu là object (đã populate), lấy _id
+      let sanPhamId = "";
+      if (item.san_pham_id) {
+        // Nếu là object (đã populate), lấy _id
+        if (typeof item.san_pham_id === 'object' && item.san_pham_id._id) {
+          sanPhamId = String(item.san_pham_id._id);
+        } else if (typeof item.san_pham_id === 'object') {
+          // Nếu là ObjectId trực tiếp
+          sanPhamId = String(item.san_pham_id);
+        } else {
+          // Nếu đã là string
+          sanPhamId = String(item.san_pham_id);
+        }
+      }
+
+      return {
+        san_pham_id: sanPhamId, // PHẢI là string
+        ten_san_pham: item.ten_san_pham || "",
+        so_luong: item.so_luong || 0,
+        kich_thuoc: item.kich_thuoc || "",
+        gia: item.gia || 0,
+      };
+    });
+
+    // Xử lý user_id - đảm bảo là string
+    let userIdStr = "";
+    if (order.user_id) {
+      if (typeof order.user_id === 'object' && order.user_id._id) {
+        userIdStr = String(order.user_id._id);
+      } else if (typeof order.user_id === 'object') {
+        userIdStr = String(order.user_id);
+      } else {
+        userIdStr = String(order.user_id);
+      }
+    }
+
+    // Dùng JSON serialize/deserialize để convert ObjectId thành string cho các trường khác
+    const orderStr = JSON.stringify(order);
+    const orderObj = JSON.parse(orderStr);
+
+    const formattedOrder = {
+      _id: String(orderObj._id || ""),
+      user_id: userIdStr,
+      items: formattedItems,
+      tong_tien: orderObj.tong_tien || 0,
+      trang_thai: orderObj.trang_thai || "pending",
+      dia_chi_giao_hang: orderObj.dia_chi_giao_hang || "",
+      so_dien_thoai: orderObj.so_dien_thoai || "",
+      ghi_chu: orderObj.ghi_chu || "",
+      createdAt: orderObj.createdAt,
+      updatedAt: orderObj.updatedAt,
+    };
+
+    console.log("✅ Order detail formatted:", {
+      _id: formattedOrder._id,
+      items_count: formattedOrder.items.length,
+      trang_thai: formattedOrder.trang_thai,
+    });
+    if (formattedOrder.items.length > 0) {
+      console.log("Sample item san_pham_id type:", typeof formattedOrder.items[0].san_pham_id);
+      console.log("Sample item san_pham_id value:", formattedOrder.items[0].san_pham_id);
+    }
+
     res.json({
       success: true,
-      data: order,
+      data: formattedOrder,
     });
   } catch (err) {
     console.error("Lỗi khi lấy chi tiết đơn hàng:", err);
@@ -205,17 +357,67 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
+    // Lấy đơn hàng cũ để so sánh trạng thái
+    const oldOrder = await Order.findById(orderId).populate("user_id", "ho_ten email");
+    if (!oldOrder) {
+      return res.status(404).json({
+        success: false,
+        message: "Đơn hàng không tồn tại",
+      });
+    }
+
+    const oldStatus = oldOrder.trang_thai;
+
+    // Cập nhật trạng thái
     const order = await Order.findByIdAndUpdate(
       orderId,
       { trang_thai },
       { new: true, runValidators: true }
     );
 
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Đơn hàng không tồn tại",
+    // Tạo thông báo cho user về thay đổi trạng thái đơn hàng
+    const statusMessages = {
+      pending: "Chờ xác nhận",
+      confirmed: "Đã xác nhận",
+      shipping: "Đang giao hàng",
+      delivered: "Đã giao hàng",
+      cancelled: "Đã hủy",
+    };
+
+    const tieuDe = "Cập nhật trạng thái đơn hàng";
+    const noiDung = `Đơn hàng #${orderId.slice(-8).toUpperCase()} của bạn đã được cập nhật từ "${statusMessages[oldStatus] || oldStatus}" sang "${statusMessages[trang_thai] || trang_thai}".`;
+
+    try {
+      // Đảm bảo user_id là ObjectId
+      let userId = order.user_id;
+      if (userId && typeof userId === 'object' && userId._id) {
+        userId = userId._id;
+      } else if (userId && typeof userId === 'object') {
+        userId = userId.toString();
+      }
+      
+      const notification = new Notification({
+        user_id: userId,
+        loai: "order_status",
+        tieu_de: tieuDe,
+        noi_dung: noiDung,
+        duong_dan: `/order/${orderId}`,
+        metadata: {
+          order_id: orderId,
+          old_status: oldStatus,
+          new_status: trang_thai,
+        },
+        da_doc: false,
       });
+      await notification.save();
+      console.log("✅ Notification created for order status update:", {
+        user_id: userId,
+        order_id: orderId,
+        new_status: trang_thai,
+      });
+    } catch (notifErr) {
+      console.error("⚠️ Failed to create notification:", notifErr);
+      // Không fail request nếu tạo thông báo lỗi
     }
 
     res.json({
